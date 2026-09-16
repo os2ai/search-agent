@@ -1,21 +1,10 @@
-networks:
-  frontend:
-    external: true
-  app:
-    driver: bridge
-    internal: false
-
 services:
   agent:
     build:
       context: .
       target: ${ENV:-dev}
-    command: ["uv", "run", "--no-sync", "uvicorn", "search_agent.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
     ports:
       - "8001"
-    networks:
-      - app
-      - frontend
     depends_on:
       searxng:
         condition: service_healthy
@@ -72,20 +61,11 @@ services:
     volumes:
       - ./src:/app/src
       - ./tests:/app/tests
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=frontend"
-      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:?}.rule=Host(`${COMPOSE_DOMAIN:?}`)"
-      # HTTPS config - enable redirect from :80 to :443
-      - "traefik.http.routers.${COMPOSE_PROJECT_NAME:?}.middlewares=redirect-to-https"
-      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
 
   searxng:
     image: searxng/searxng:latest
-    networks:
-      - app
     ports:
-      - '8080'
+      - "8080"
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--spider", "http://localhost:8080/"]
       interval: 15s
@@ -101,8 +81,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    networks:
-      - app
     ports:
       - "6379"
     command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]

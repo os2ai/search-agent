@@ -1,4 +1,15 @@
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS base
+FROM python:3.12-slim-bookworm AS base
+
+# Official Python base + uv copied in, per Astral's documented Docker
+# integration. We used to build on ghcr.io/astral-sh/uv:python3.12-bookworm-slim,
+# but Astral stopped publishing the combined Python+uv images: that tag is
+# frozen on a February 2026 build (uv 0.9.30) and there is no newer versioned
+# equivalent, so the Debian layer under it no longer gets rebuilds. The
+# official image is rebuilt continuously, and this pins the uv version
+# explicitly rather than inheriting whatever the base happens to ship.
+# Same base as eventdatabasen-agent / retsinformation-api-agent, which install
+# with pip; this project keeps uv because it has a uv.lock.
+COPY --from=ghcr.io/astral-sh/uv:0.12.8 /uv /uvx /bin/
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
@@ -26,7 +37,7 @@ FROM base AS dev
 RUN uv sync --frozen
 EXPOSE 8001
 HEALTHCHECK CMD curl -f http://localhost:8001/health || exit 1
-CMD ["uv", "run", "--no-sync", "uvicorn", "search_agent.main:app", "--host", "0.0.0.0", "--port", "8001"]
+CMD ["uv", "run", "--no-sync", "uvicorn", "search_agent.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
 
 # --- Prod target: runtime deps only ---
 FROM base AS prod
