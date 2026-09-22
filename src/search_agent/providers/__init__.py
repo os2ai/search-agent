@@ -16,10 +16,6 @@ _provider: SearchProvider | None = None
 
 def _create_provider(name: str) -> SearchProvider:
     if name == "staan":
-        if not settings.staan_api_key:
-            raise RuntimeError(
-                "SEARCH_AGENT_STAAN_API_KEY is required when SEARCH_AGENT_SEARCH_PROVIDER=staan"
-            )
         return StaanProvider()
     return SearxngProvider()
 

@@ -32,16 +32,15 @@ USER app
 COPY --chown=app:app pyproject.toml uv.lock ./
 COPY --chown=app:app src/ ./src/
 
+EXPOSE 8001
+HEALTHCHECK CMD curl -f http://localhost:8001/health || exit 1
+
 # --- Dev target: includes test/lint tools ---
 FROM base AS dev
 RUN uv sync --frozen
-EXPOSE 8001
-HEALTHCHECK CMD curl -f http://localhost:8001/health || exit 1
 CMD ["uv", "run", "--no-sync", "uvicorn", "search_agent.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
 
 # --- Prod target: runtime deps only ---
 FROM base AS prod
 RUN uv sync --frozen --no-dev
-EXPOSE 8001
-HEALTHCHECK CMD curl -f http://localhost:8001/health || exit 1
 CMD ["uv", "run", "--no-sync", "--no-dev", "uvicorn", "search_agent.main:app", "--host", "0.0.0.0", "--port", "8001"]
