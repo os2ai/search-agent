@@ -20,8 +20,14 @@ logger = logging.getLogger(__name__)
 
 # Patterns that suggest a multi-faceted query needing decomposition
 _COMPLEX_QUERY_PATTERNS = re.compile(
+    # eng:
     r"\b(compare|vs\.?|versus|difference between|pros and cons|advantages and disadvantages"
-    r"|on one hand|similarities and differences)\b",
+    # da:
+    r"|sammenlign|modsat|omvendt|forskellen mellem|fordele og ulemper|pros og cons"
+    # eng:
+    r"|on one hand|similarities and differences"
+    # da:
+    r"|på den ene side|ligheder og forskelle)\b",
     re.IGNORECASE,
 )
 
