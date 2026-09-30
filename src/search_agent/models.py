@@ -25,6 +25,18 @@ class RawSearchResult(BaseModel):
         return v[:500] if len(v) > 500 else v
 
 
+class PiiCheck(BaseModel):
+    """Structured verdict from the PII gate.
+
+    `reason` is for logs/operators only — the gate prompt instructs the model
+    to name the PII category generically and never echo the personal data
+    itself into this field.
+    """
+
+    contains_pii: bool
+    reason: str = ""
+
+
 class Source(BaseModel):
     """A cited source in the final output."""
 

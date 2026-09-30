@@ -5,6 +5,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 
 from search_agent.config import settings
 from search_agent.models import RawSearchResult
+from search_agent.pii import PiiBlockedError
 from search_agent.pipeline import run_search_pipeline_raw
 
 mcp = MCPServer("search-agent")
@@ -35,8 +36,17 @@ async def search_web(query: str, context: str = "") -> str:
         context: Optional conversation context to help refine the search.
 
     Returns:
-        JSON array of search results, each with 'title', 'link', and 'snippet' keys.
+        JSON array of search results, each with 'title', 'link', and 'snippet'
+        keys. If the PII gate refuses the request, returns a
+        JSON object with a single 'error' key explaining the refusal instead.
     """
-    raw_results: list[RawSearchResult] = await run_search_pipeline_raw(query=query, context=context)
+    try:
+        raw_results: list[RawSearchResult] = await run_search_pipeline_raw(
+            query=query, context=context
+        )
+    except PiiBlockedError as exc:
+        # Surface the refusal to the calling LLM rather than pretending the
+        # web has nothing to say. str(exc) is the generic refusal message.
+        return json.dumps({"error": str(exc)})
     formatted = [{"title": r.title, "link": r.url, "snippet": r.snippet} for r in raw_results]
     return json.dumps(formatted)
