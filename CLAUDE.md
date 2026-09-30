@@ -94,6 +94,14 @@ Tests mock all external services (LLM and SearXNG). `conftest.py` sets `SEARCH_A
 
 pytest-asyncio is configured with `asyncio_mode = "auto"` so async tests don't need the `@pytest.mark.asyncio` decorator.
 
+The PII gate also has an opt-in **eval harness** (`tests/test_pii_eval.py` + `tests/data/pii_eval_cases.json`): ~95 fully synthetic cases (invented names/CPRs/addresses) covering true PII and near-miss non-PII (company contacts, public figures, fictional/placeholder data, ID-format questions, prompt injections). It calls the real configured LLM, so it is skipped unless `RUN_PII_EVAL=1` — run it after changing the gate prompt or model; pass bar is every case matching its `expected` verdict. `PII_EVAL_CATEGORY=cpr_number,name_phone` runs a subset:
+
+(`-e RUN_PII_EVAL=1` is required — the agent service's `environment:` block doesn't pass the variable through, and `docker compose run` doesn't forward arbitrary host env vars):
+
+```bash
+docker compose run --rm --no-deps -e RUN_PII_EVAL=1 agent uv run pytest tests/test_pii_eval.py -v -s
+```
+
 ## Code Style
 
 - Python 3.12+, ruff with rules: E, F, I, N, W, UP, B, RUF
@@ -102,7 +110,7 @@ pytest-asyncio is configured with `asyncio_mode = "auto"` so async tests don't n
 
 ## Docker
 
-Multi-stage Dockerfile with `dev` and `prod` targets. docker-compose defines three services: `agent` (container port 8001), `searxng` (container port 8080), and `redis` (container port 6379, `redis:7-alpine` with 256MB `maxmemory` + `allkeys-lru`, data persisted at `.docker/data/redis/`). All three have health checks — ports are not host-mapped (random host ports unless overridden). Services connect via a bridge `app` network; `agent` is also on an external `frontend` network. Source is volume-mounted for live reload in dev. Build target is controlled by `ENV` variable (defaults to `dev`). Note: `Taskfile.yml` currently sets `SERVICE: search-agent`, which no longer matches the compose service name `agent` — task commands that use `docker compose exec {{.SERVICE}}` will fail until that var is updated. Use `docker compose exec agent …` directly in the meantime.
+Multi-stage Dockerfile with `dev` and `prod` targets. docker-compose defines three services: `agent` (container port 8001), `searxng` (container port 8080), and `redis` (container port 6379, `redis:7-alpine` with 256MB `maxmemory` + `allkeys-lru`, data persisted at `.docker/data/redis/`). All three have health checks — ports are not host-mapped (random host ports unless overridden). Services connect via a bridge `app` network; `agent` is also on an external `frontend` network. Source is volume-mounted for live reload in dev. Build target is controlled by `ENV` variable (defaults to `dev`).
 
 ## Important rules
 

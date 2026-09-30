@@ -148,8 +148,12 @@ LLM gate (`pii.py` + `agents/pii_guard.py`) classifies the request's **query and
 conversation context** together and blocks the request when it detects personal
 data about an identifiable natural person (GDPR Art. 4(1)) — e.g. a private
 individual's name with identifying details, phone number, address, e-mail, CPR
-/ national ID number, or health information. Companies, public figures acting
-professionally, and general knowledge questions are explicitly allowed.
+/ national ID number, vehicle registration plate, health information, or a
+request to identify or locate a specific private person (who lives at an
+address, who owns a number or plate). Companies, public figures acting
+professionally, publicly listed business contact details of a trade or
+profession, general knowledge questions, and obviously synthetic or placeholder
+data are explicitly allowed.
 
 - **Single choke point:** the gate runs in `_run_plan_and_search`, so both
   `/api/v1/search` and the MCP `search_web` tool are covered. A blocked REST
@@ -164,6 +168,23 @@ professionally, and general knowledge questions are explicitly allowed.
   logs reproduce the personal data. The gate is not cached.
 - **Disable:** set `SEARCH_AGENT_SEARCH_PII_CHECK_ENABLED=false` to turn it off
   (adds one LLM call per request when enabled).
+
+**Evaluating the gate:** `tests/test_pii_eval.py` runs ~95 fully synthetic
+cases from `tests/data/pii_eval_cases.json` (invented names, CPR numbers and
+addresses — no real personal data) through the real gate LLM. It covers true
+PII and near-miss non-PII (company contacts, public figures, fictional or
+placeholder data, ID-format questions, prompt injections). The test is
+skipped in normal runs; enable it after changing the gate prompt or model:
+
+```bash
+docker compose run --rm --no-deps -e RUN_PII_EVAL=1 agent \
+    uv run pytest tests/test_pii_eval.py -v -s
+```
+
+(`-e` is required — `docker compose run` doesn't forward host env vars that aren't
+referenced in the service's `environment:` block.) Every case must match its
+expected verdict; add `-e PII_EVAL_CATEGORY=<category>[,...]` to limit the run to
+specific categories.
 
 ## Caching
 
