@@ -32,9 +32,11 @@ docker compose run --rm --no-deps agent uv run ruff format src tests     # Forma
 
 ## Architecture
 
-### 3-Stage Search Pipeline (`pipeline.py`)
+### Search Pipeline (`pipeline.py`)
 
-0. **PII Gate** — `pii.py` + `agents/pii_guard.py`. Before the planner or any search backend is contacted, an LLM classifies the query **and** conversation context for personal data (GDPR Art. 4(1)) and refuses the request if found. Runs in `_run_plan_and_search` so both entry points (`run_search_pipeline` and `run_search_pipeline_raw`/MCP) are covered. **Fails closed**: check error/timeout ⇒ refusal. Raises `PiiBlockedError` (generic message, never echoes the detected data); `run_search_pipeline` converts it to a refusal `SearchResult`, the MCP tool returns `{"error": ...}`. Not cached. Disable via `search_pii_check_enabled`.
+Three core stages — plan → search → synthesize — with an optional page-fetch step between search and synthesize. A pre-flight PII gate runs *before* stage 1 and short-circuits the whole pipeline, so it is deliberately not counted as a stage.
+
+- **Pre-flight: PII Gate** — `pii.py` + `agents/pii_guard.py`. Before the planner or any search backend is contacted, an LLM classifies the query **and** conversation context for personal data (GDPR Art. 4(1)) and refuses the request if found. Runs in `_run_plan_and_search` so both entry points (`run_search_pipeline` and `run_search_pipeline_raw`/MCP) are covered. **Fails closed**: check error/timeout ⇒ refusal. Raises `PiiBlockedError` (generic message, never echoes the detected data); `run_search_pipeline` converts it to a refusal `SearchResult`, the MCP tool returns `{"error": ...}`. Not cached. Disable via `search_pii_check_enabled`.
 1. **Query Planner** — Decomposes complex questions into up to `search_max_queries` targeted search queries via LLM. Skipped for "simple" queries (word/`?` thresholds in settings, plus a hardcoded complexity regex) controlled by `_is_simple_query()`.
 2. **Search Executor** — Calls the configured search provider (`search_provider`: `searxng` default, or `staan`) via HTTP, runs multiple queries concurrently, deduplicates by URL, caps at `search_max_results`. The Staan provider can return full page content / scored chunks per result directly into `RawSearchResult.content`.
 3. **(Optional) Page Fetch** — If `search_fetch_page_content=true`, `fetch.py` fetches the top `search_fetch_max_pages` result URLs and extracts main text via `trafilatura`; the extracted text lands in `RawSearchResult.content` for the synthesizer. Guarded by content-type check, byte cap, and an SSRF filter that rejects private/loopback/link-local hosts. MCP path is snippet-only regardless.
