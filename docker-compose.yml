@@ -73,7 +73,7 @@ services:
       retries: 3
       start_period: 10s
     environment:
-      SEARXNG_SECRET: ${SEARXNG_SECRET:?must be set — SearXNG uses this to sign tokens}
+      SEARXNG_SECRET: ${SEARXNG_SECRET:-MySuperSecret}
       SEARXNG_METHOD: ${SEARXNG_METHOD:-POST}
     volumes:
       - ./.docker/searxng/settings.yml:/etc/searxng/settings.yml

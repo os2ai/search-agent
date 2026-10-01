@@ -139,8 +139,8 @@ async def _fetch_with_validated_redirects(
                 async for chunk in response.aiter_bytes():
                     total += len(chunk)
                     if total > max_bytes:
-                        logger.debug("Fetch aborted (size cap %d exceeded): %s", max_bytes, current)
-                        return None
+                        logger.debug("Fetch cut short (size cap %d exceeded): %s", max_bytes, current)
+                        return b"".join(chunks).decode(response.encoding or "utf-8", errors="replace")
                     chunks.append(chunk)
                 return b"".join(chunks).decode(response.encoding or "utf-8", errors="replace")
         except (httpx.HTTPError, UnicodeDecodeError):

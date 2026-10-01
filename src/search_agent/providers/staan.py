@@ -78,6 +78,12 @@ class StaanProvider:
 
     name = "staan"
 
+    def __init__(self, *args, **kwargs):
+        if not settings.staan_api_key:
+            raise RuntimeError(
+                "SEARCH_AGENT_STAAN_API_KEY is required when SEARCH_AGENT_SEARCH_PROVIDER=staan"
+            )
+
     @property
     def content_result_cap(self) -> int:
         # Enforced globally in search_multiple across all queries, not per query.
