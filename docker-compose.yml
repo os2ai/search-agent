@@ -11,7 +11,13 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')",
+        ]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -61,6 +67,11 @@ services:
     volumes:
       - ./src:/app/src
       - ./tests:/app/tests
+      # Accepted basedpyright warnings, so only new ones fail CI.
+      - ./.basedpyright:/app/.basedpyright
+    labels:
+      # Picked up by the lint and tests workflows.
+      dk.itkdev.python: "true"
 
   searxng:
     image: searxng/searxng:latest
@@ -83,7 +94,14 @@ services:
     image: redis:7-alpine
     ports:
       - "6379"
-    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    command:
+      [
+        "redis-server",
+        "--maxmemory",
+        "256mb",
+        "--maxmemory-policy",
+        "allkeys-lru",
+      ]
     volumes:
       - ./.docker/data/redis/:/data
     healthcheck:
@@ -92,3 +110,12 @@ services:
       timeout: 3s
       retries: 3
       start_period: 5s
+
+  # Used by .github/workflows/yaml.yaml. No official image yet
+  # (https://github.com/prettier/prettier/issues/15206).
+  prettier:
+    image: jauderho/prettier
+    profiles:
+      - dev
+    volumes:
+      - ./:/work

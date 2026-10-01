@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings
@@ -9,7 +9,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="before")
     @classmethod
-    def ignore_empty_env_vars(cls, values: dict) -> dict:
+    def ignore_empty_env_vars(cls, values: dict[str, Any]) -> dict[str, Any]:
         return {k: v for k, v in values.items() if v != ""}
 
     debug: bool = False

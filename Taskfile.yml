@@ -5,8 +5,7 @@ dotenv: [".env.docker.local", ".env.local", ".env"]
 vars:
   DOCKER_COMPOSE: '{{.TASK_DOCKER_COMPOSE | default "docker compose"}}'
   SERVICE: agent
-  #PYTHON: "{{.DOCKER_COMPOSE}} exec {{.SERVICE}}"
-  PYTHON: "docker exec -e HOME=/tmp -i openwebui-search-agent-1 uv run --no-sync"
+  PYTHON: "{{.DOCKER_COMPOSE}} exec -e HOME=/tmp {{.SERVICE}} uv run --no-sync"
 
 tasks:
   default:
@@ -81,38 +80,16 @@ tasks:
       - "{{.PYTHON}} pytest {{.CLI_ARGS}}"
 
   lint:
-    desc: "Check coding standards"
+    desc: "ruff check + format --check (same as CI)"
     cmds:
-      - task: lint:check
-      - task: lint:format:check
-    silent: true
-
-  lint:check:
-    desc: "Lint code"
-    cmds:
-      - "{{.PYTHON}} ruff check src/"
+      - "{{.PYTHON}} ruff check ."
+      - "{{.PYTHON}} ruff format --check ."
 
   lint:fix:
-    desc: "Fix lint issues"
+    desc: "ruff check --fix + format"
     cmds:
-      - "{{.PYTHON}} ruff check --fix src/"
-
-  lint:format:
-    desc: "Format code"
-    cmds:
-      - "{{.PYTHON}} ruff format src/"
-
-  lint:format:check:
-    desc: "Check code formatting"
-    cmds:
-      - "{{.PYTHON}} ruff format --check src/"
-
-  coding-standards:apply:
-    desc: "Apply coding standards"
-    cmds:
-      - task: lint:fix
-      - task: lint:format
-    silent: true
+      - "{{.PYTHON}} ruff check --fix ."
+      - "{{.PYTHON}} ruff format ."
 
   # ---------------------------------------------------------------------------
   # Security audit

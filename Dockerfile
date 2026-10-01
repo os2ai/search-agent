@@ -11,8 +11,10 @@ FROM python:3.12-slim-bookworm AS base
 # with pip; this project keeps uv because it has a uv.lock.
 COPY --from=ghcr.io/astral-sh/uv:0.12.8 /uv /uvx /bin/
 
+# .venv on PATH so CI can call ruff, pytest and basedpyright without `uv run`.
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PATH="/app/.venv/bin:$PATH"
 
 # Non-root user matching the k8s securityContext (runAsUser/runAsGroup: 1000).
 RUN groupadd --gid 1000 app \

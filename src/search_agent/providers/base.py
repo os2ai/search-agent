@@ -1,7 +1,7 @@
 import asyncio
 import json
 import logging
-from typing import Protocol
+from typing import Any, Protocol
 from urllib.parse import urlparse
 
 import httpx
@@ -18,7 +18,9 @@ class SearchProvider(Protocol):
     checks and logs, so it must be stable and unique per provider.
     """
 
-    name: str
+    # Read-only properties so a plain class attribute or a @property both satisfy them.
+    @property
+    def name(self) -> str: ...
 
     # Max results allowed to carry ``content`` into the synthesizer prompt, or
     # None for no cap. Enforced globally by ``search_multiple`` *after* the
@@ -26,14 +28,15 @@ class SearchProvider(Protocol):
     # N queries stack up to N times the intended content, overflowing the LLM
     # context window. Providers that never populate content from search (e.g.
     # SearXNG) leave this None.
-    content_result_cap: int | None
+    @property
+    def content_result_cap(self) -> int | None: ...
 
     async def search(self, client: httpx.AsyncClient, query: str) -> list[RawSearchResult]: ...
 
     async def health(self, client: httpx.AsyncClient) -> bool: ...
 
 
-async def read_capped_json(response: httpx.Response, max_bytes: int) -> dict | None:
+async def read_capped_json(response: httpx.Response, max_bytes: int) -> dict[str, Any] | None:
     """Stream a JSON response body, aborting if it exceeds ``max_bytes``.
 
     Why: ``response.json()`` reads the full body unbounded. Search backends

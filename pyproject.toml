@@ -41,6 +41,7 @@ dev = [
     "fakeredis>=2.35,<3",
     "pip-audit>=2.10,<3",
     "bandit>=1.9,<2",
+    "basedpyright>=1.40,<2",
 ]
 
 [tool.hatch.build.targets.wheel]

@@ -1,5 +1,6 @@
 import json
 import os
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -27,7 +28,7 @@ def _reset_provider():
     set_provider_for_testing(None)
 
 
-def make_stream_mock(json_body: dict) -> MagicMock:
+def make_stream_mock(json_body: dict[str, Any]) -> MagicMock:
     """Build a mock async context manager mimicking ``client.stream(...)``.
 
     SearXNG fetch uses streaming reads to enforce a size cap, so tests need

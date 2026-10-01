@@ -1,3 +1,4 @@
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
@@ -12,11 +13,11 @@ from tests.conftest import make_stream_mock
 provider = StaanProvider()
 
 
-def make_staan_body(results: list[dict]) -> dict:
+def make_staan_body(results: list[dict[str, Any]]) -> dict[str, Any]:
     return {"search_id": "test", "web": {"results": results}}
 
 
-def full_result(**overrides) -> dict:
+def full_result(**overrides) -> dict[str, Any]:
     item = {
         "title": "Vector databases",
         "url": "https://example.com/vector-dbs",

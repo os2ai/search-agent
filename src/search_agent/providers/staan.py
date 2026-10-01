@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 import httpx
 from pydantic import ValidationError
@@ -11,8 +12,8 @@ from search_agent.providers.base import is_valid_url, normalize_query, read_capp
 logger = logging.getLogger(__name__)
 
 
-def _build_params(query: str) -> dict:
-    params: dict = {"q": query, "market": settings.staan_market}
+def _build_params(query: str) -> dict[str, Any]:
+    params: dict[str, Any] = {"q": query, "market": settings.staan_market}
     if settings.staan_enrichment == "full_content":
         # Markdown only — HTML would need extraction before it's useful to the LLM.
         params["full_content"] = "markdown"
@@ -23,7 +24,7 @@ def _build_params(query: str) -> dict:
     return params
 
 
-def _extract_content(item: dict) -> str | None:
+def _extract_content(item: dict[str, Any]) -> str | None:
     """Pull enrichment text from a result item, capped at staan_content_max_chars.
 
     The cap bounds the synthesizer prompt: results are JSON-dumped into a
@@ -40,7 +41,7 @@ def _extract_content(item: dict) -> str | None:
     return None
 
 
-def _to_result(item: dict) -> RawSearchResult | None:
+def _to_result(item: dict[str, Any]) -> RawSearchResult | None:
     # Coerce with ``or ""`` (not ``get(..., "")``) so an explicit JSON null —
     # ``get`` only falls back on a *missing* key — becomes an empty string
     # rather than None, which the required ``str`` fields would reject.

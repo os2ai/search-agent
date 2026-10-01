@@ -94,7 +94,7 @@ async def health(deep: bool = False):
 
 
 @app.post("/api/v1/search", response_model=SearchResult)
-async def search(request: SearchRequest) -> SearchResult:
+async def search(request: SearchRequest) -> SearchResult | JSONResponse:
     """Run the search pipeline and return a sourced summary."""
     # Don't log `context` at INFO — it routinely carries conversation
     # history / PII. Truncate `query` for the same reason. Full text is
