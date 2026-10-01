@@ -7,13 +7,15 @@ A FastAPI service that implements a 3-stage web search pipeline using [Pydantic 
 ```mermaid
 flowchart TD
     Req([SearchRequest<br/>query, context, no_cache])
+    Pii[PII Gate<br/>LLM · fails closed]
     Planner[Query Planner<br/>LLM · skipped for simple queries]
     Search[Search Executor<br/>SearXNG · concurrent · deduped]
     Fetch[Fetch &amp; Extract<br/>optional · trafilatura]
     Synth[Analyze + Synthesize<br/>LLM · cited summary]
     Resp([SearchResult<br/>summary, sources])
 
-    Req --> Planner --> Search --> Fetch --> Synth --> Resp
+    Req --> Pii -->|clean| Planner --> Search --> Fetch --> Synth --> Resp
+    Pii -->|personal data found<br/>or check failure| Refused([Refused —<br/>no search executed])
 
     subgraph Redis["Redis cache — fail-open · bypass via no_cache=true"]
       direction TB
@@ -34,8 +36,8 @@ See the [Caching](#caching) section below for fail-open semantics, bypass behavi
 | Endpoint | Method | Description |
 |---|---|---|
 | `/health` | GET | Health check. Pass `?deep=true` to also verify SearXNG connectivity. |
-| `/api/v1/search` | POST | Run the full search pipeline. Accepts `{"query": "...", "context": "...", "no_cache": false}`. Set `no_cache: true` to bypass Redis and force a fresh run. |
-| `/mcp` | POST | MCP Streamable HTTP transport (the MCP app is mounted at `/`, the transport itself is served at `/mcp`). Exposes `search_web` tool (steps 1+2 only, no LLM synthesis). |
+| `/api/v1/search` | POST | Run the full search pipeline. Accepts `{"query": "...", "context": "...", "no_cache": false}`. Set `no_cache: true` to bypass Redis and force a fresh run. Requests whose query/context contains personal data are refused by the [PII gate](#pii-gate). |
+| `/mcp` | POST | MCP Streamable HTTP transport (the MCP app is mounted at `/`, the transport itself is served at `/mcp`). Exposes `search_web` tool (steps 1+2 only, no LLM synthesis). Also behind the PII gate — a refusal returns `{"error": "..."}` instead of results. |
 
 ## Prerequisites
 
@@ -116,6 +118,8 @@ All environment variables use the `SEARCH_AGENT_` prefix (via pydantic-settings)
 | `SEARCH_AGENT_DATETIME_FORMAT` | `%A, %B %-d, %Y, %H:%M %Z` | Date format string |
 | `SEARCH_AGENT_MCP_ALLOWED_HOSTS` | `["search-agent:8001","localhost:8001"]` | `Host` header allowlist for the MCP transport (DNS-rebinding protection); a mismatch returns 421 |
 | `SEARCH_AGENT_SEARCH_SKIP_PLANNER_FOR_SIMPLE_QUERIES` | `true` | Skip query planner for simple queries |
+| `SEARCH_AGENT_SEARCH_PII_CHECK_ENABLED` | `true` | PII gate: LLM-check every request's query + context for personal data before any search is issued. See [PII gate](#pii-gate) |
+| `SEARCH_AGENT_SEARCH_PII_CHECK_TIMEOUT` | `10` | PII check timeout (seconds). On timeout or error the request is **refused** (fail closed) |
 | `SEARCH_AGENT_SEARCH_MAX_QUERIES` | `3` | Cap on how many queries the planner's output is truncated to |
 | `SEARCH_AGENT_SEARCH_MAX_RESULTS` | `15` | Max deduplicated results passed to the synthesizer / returned via MCP |
 | `SEARCH_AGENT_SEARCH_SIMPLE_QUERY_MAX_WORDS` | `15` | Word-count threshold for the simple-query heuristic |
@@ -127,6 +131,7 @@ All environment variables use the `SEARCH_AGENT_` prefix (via pydantic-settings)
 | `SEARCH_AGENT_SEARCH_FETCH_MAX_BYTES` | `2000000` | Abort a page fetch if the response exceeds this many bytes |
 | `SEARCH_AGENT_SEARCH_QUERY_PLANNER_PROMPT` | *(built-in)* | Override the query planner system prompt |
 | `SEARCH_AGENT_SEARCH_ANALYZE_SYNTHESIZE_PROMPT` | *(built-in)* | Override the analyze+synthesize system prompt |
+| `SEARCH_AGENT_SEARCH_PII_CHECK_PROMPT` | *(built-in)* | Override the PII gate system prompt |
 | `SEARCH_AGENT_CACHE_BACKEND` | `redis` | Cache backend: `redis` (production — shared across pods), `memory` (tests/dev only, per-process), or `disabled`. |
 | `SEARCH_AGENT_CACHE_REDIS_URL` | `redis://redis:6379/0` | Redis connection URL. Used only when `CACHE_BACKEND=redis`. |
 | `SEARCH_AGENT_CACHE_FETCH_TTL` | `3600` | TTL (seconds) for successful page extracts. |
@@ -134,6 +139,52 @@ All environment variables use the `SEARCH_AGENT_` prefix (via pydantic-settings)
 | `SEARCH_AGENT_CACHE_SEARXNG_TTL` | `300` | TTL (seconds) for SearXNG result lists. Short by default because engine rankings shift quickly. |
 | `SEARCH_AGENT_CACHE_STAAN_TTL` | `300` | TTL (seconds) for Staan result lists. |
 | `SEARCH_AGENT_CACHE_PLANNER_TTL` | `21600` | TTL (seconds) for cached planner outputs. The cache key includes today's date (`YYYY-MM-DD`), so entries roll daily regardless of TTL. |
+
+## PII gate
+
+To comply with EU GDPR, the service refuses to run searches that would process
+personal data. Before the query planner or any search backend is contacted, an
+LLM gate (`pii.py` + `agents/pii_guard.py`) classifies the request's **query and
+conversation context** together and blocks the request when it detects personal
+data about an identifiable natural person (GDPR Art. 4(1)) — e.g. a private
+individual's name with identifying details, phone number, address, e-mail, CPR
+/ national ID number, vehicle registration plate, health information, or a
+request to identify or locate a specific private person (who lives at an
+address, who owns a number or plate). Companies, public figures acting
+professionally, publicly listed business contact details of a trade or
+profession, general knowledge questions, and obviously synthetic or placeholder
+data are explicitly allowed.
+
+- **Single choke point:** the gate runs in `_run_plan_and_search`, so both
+  `/api/v1/search` and the MCP `search_web` tool are covered. A blocked REST
+  request returns a refusal summary with no sources; a blocked MCP call returns
+  `{"error": "..."}`.
+- **Fails closed:** if the check errors or exceeds
+  `SEARCH_AGENT_SEARCH_PII_CHECK_TIMEOUT`, the search is refused rather than
+  allowed through — availability is traded for the stronger guarantee that no
+  personal data is forwarded.
+- **No leakage:** the refusal message is a fixed generic string and the model is
+  instructed never to echo the detected data, so neither the response nor the
+  logs reproduce the personal data. The gate is not cached.
+- **Disable:** set `SEARCH_AGENT_SEARCH_PII_CHECK_ENABLED=false` to turn it off
+  (adds one LLM call per request when enabled).
+
+**Evaluating the gate:** `tests/test_pii_eval.py` runs ~95 fully synthetic
+cases from `tests/data/pii_eval_cases.json` (invented names, CPR numbers and
+addresses — no real personal data) through the real gate LLM. It covers true
+PII and near-miss non-PII (company contacts, public figures, fictional or
+placeholder data, ID-format questions, prompt injections). The test is
+skipped in normal runs; enable it after changing the gate prompt or model:
+
+```bash
+docker compose run --rm --no-deps -e RUN_PII_EVAL=1 agent \
+    uv run pytest tests/test_pii_eval.py -v -s
+```
+
+(`-e` is required — `docker compose run` doesn't forward host env vars that aren't
+referenced in the service's `environment:` block.) Every case must match its
+expected verdict; add `-e PII_EVAL_CATEGORY=<category>[,...]` to limit the run to
+specific categories.
 
 ## Caching
 

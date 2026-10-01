@@ -13,6 +13,7 @@ from search_agent.config import settings
 from search_agent.deps import PipelineDeps, get_http_client, get_model
 from search_agent.fetch import fetch_pages
 from search_agent.models import RawSearchResult, SearchResult
+from search_agent.pii import PiiBlockedError, check_pii
 from search_agent.providers import get_provider
 from search_agent.providers.base import search_multiple
 
@@ -45,7 +46,22 @@ def _is_simple_query(query: str) -> bool:
 
 
 async def _run_plan_and_search(query: str, context: str = "") -> list[RawSearchResult]:
-    """Steps 1+2: plan queries and execute them against the search provider."""
+    """Steps 1+2: plan queries and execute them against the search provider.
+
+    Raises:
+        PiiBlockedError: when the PII gate refuses the query/context (or the
+            check itself fails — it fails closed). Raised here so both entry
+            points (`run_search_pipeline` and `run_search_pipeline_raw`) are
+            gated before any planner LLM call or search request leaves the
+            service with personal data.
+    """
+    # PII gate: runs before the planner (whose output would otherwise embed
+    # PII into generated queries and the Redis planner cache) and before any
+    # search backend sees the text.
+    verdict = await check_pii(query, context)
+    if not verdict.allowed:
+        raise PiiBlockedError(verdict.message)
+
     model = get_model()
     http_client = get_http_client()
     deps = PipelineDeps(http_client=http_client, model=model)
@@ -115,6 +131,11 @@ async def run_search_pipeline(query: str, context: str = "") -> SearchResult:
     try:
         async with asyncio.timeout(settings.search_pipeline_timeout):
             return await _run_search_pipeline(query, context)
+    except PiiBlockedError as exc:
+        # str(exc) is the fixed generic refusal message — never the query,
+        # which is itself the personal data we refuse to process.
+        logger.info("Search refused by PII gate")
+        return SearchResult(summary=str(exc), sources=[])
     except TimeoutError:
         logger.warning(
             "Search pipeline timed out after %ds for query: %s",
@@ -187,7 +208,12 @@ async def _run_search_pipeline(query: str, context: str = "") -> SearchResult:
 
 
 async def run_search_pipeline_raw(query: str, context: str = "") -> list[RawSearchResult]:
-    """Run steps 1+2 only (plan + search). Returns raw results with timeout."""
+    """Run steps 1+2 only (plan + search). Returns raw results with timeout.
+
+    Raises ``PiiBlockedError`` when the PII gate refuses the query — the MCP
+    caller turns that into a visible tool error instead of a silent empty
+    result list.
+    """
     try:
         async with asyncio.timeout(settings.search_pipeline_timeout):
             results = await _run_plan_and_search(query, context)

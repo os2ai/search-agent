@@ -16,6 +16,9 @@ os.environ["SEARCH_AGENT_SEARCH_FETCH_PAGE_CONTENT"] = "false"
 os.environ["SEARCH_AGENT_SEARCH_PROVIDER"] = "searxng"
 # Existing tests assume no caching; cache-specific tests opt in per-test.
 os.environ["SEARCH_AGENT_CACHE_BACKEND"] = "disabled"
+# Existing tests assume no PII gate; gate-specific tests patch check_pii
+# (see tests/test_pii.py for the gate's own coverage).
+os.environ["SEARCH_AGENT_SEARCH_PII_CHECK_ENABLED"] = "false"
 
 
 @pytest.fixture(autouse=True)
