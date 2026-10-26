@@ -5,8 +5,7 @@ dotenv: [".env.docker.local", ".env.local", ".env"]
 vars:
   DOCKER_COMPOSE: '{{.TASK_DOCKER_COMPOSE | default "docker compose"}}'
   SERVICE: agent
-  #PYTHON: "{{.DOCKER_COMPOSE}} exec {{.SERVICE}}"
-  PYTHON: "docker exec -e HOME=/tmp -i openwebui-search-agent-1 uv run --no-sync"
+  PYTHON: "{{.DOCKER_COMPOSE}} exec agent uv run --no-sync"
 
 tasks:
   default:
