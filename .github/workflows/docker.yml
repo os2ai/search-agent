@@ -1,0 +1,89 @@
+name: docker
+
+on:
+  push:
+    branches: ["develop"]
+    tags: ["*.*.*"]
+  pull_request:
+    branches: ["develop"]
+
+permissions:
+  contents: read
+
+jobs:
+  image-build:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build prod target
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: prod
+          load: true
+          tags: search-agent:prod
+          cache-from: type=gha,scope=prod
+          cache-to: type=gha,mode=max,scope=prod
+
+      - name: Smoke test /health
+        run: |
+          docker run -d --name smoke -p 127.0.0.1:8001:8001 \
+            -e SEARCH_AGENT_CACHE_BACKEND=disabled \
+            -e SEARCH_AGENT_LLM_BASE_URL=http://127.0.0.1:9/v1 \
+            -e SEARCH_AGENT_LLM_API_KEY=*** \
+            -e SEARCH_AGENT_LLM_MODEL=smoke \
+            search-agent:prod
+          for _ in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8001/health && exit 0
+            sleep 2
+          done
+          docker logs smoke
+          exit 1
+
+  release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: [image-build]
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up QEMU (arm64 cross-build)
+        uses: docker/setup-qemu-action@v4
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: prod
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha,scope=prod
+          cache-to: type=gha,mode=max,scope=prod
