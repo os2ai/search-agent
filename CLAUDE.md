@@ -18,7 +18,7 @@ task lint:check                          # Lint (src/ only)
 task lint:format                         # Format (src/ only)
 task lint                                # Lint + format check
 task coding-standards:apply              # Lint fix + format
-task build:image                         # Build and push prod image to ghcr.io/aarhusai/search-agent
+task build:image                         # Build and push prod image to ghcr.io/os2ai/search-agent
 task build:image TAG=v1.0.0              # With custom tag
 ```
 
