@@ -9,7 +9,7 @@ FROM python:3.12-slim-bookworm AS base
 # explicitly rather than inheriting whatever the base happens to ship.
 # Same base as eventdatabasen-agent / retsinformation-api-agent, which install
 # with pip; this project keeps uv because it has a uv.lock.
-COPY --from=ghcr.io/astral-sh/uv:0.12.8 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.12.24 /uv /uvx /bin/
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
