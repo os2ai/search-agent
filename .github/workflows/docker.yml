@@ -1,5 +1,10 @@
 name: docker
 
+# Release contract: publishing to GHCR happens ONLY on creation of a
+# semver tag (the `*.*.*` tag trigger below gates the `release` job;
+# it never publishes on a branch push). Pushes/PRs to develop merely
+# build the prod target and smoke-test it, so a merge to develop - or
+# to main - can never publish an image by itself.
 on:
   push:
     branches: ["develop"]
@@ -23,6 +28,7 @@ jobs:
         with:
           context: .
           target: prod
+          push: false # build-only; images are pushed solely by the release job
           load: true
           tags: search-agent:prod
           cache-from: type=gha,scope=prod
