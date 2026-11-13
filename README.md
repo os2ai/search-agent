@@ -194,7 +194,7 @@ task build:image                         # Build and push with :latest tag
 task build:image TAG=v1.0.0              # Build and push with custom tag
 ```
 
-Image is pushed to `ghcr.io/aarhusai/search-agent`.
+Image is pushed to `ghcr.io/os2ai/search-agent`.
 
 ## Docker
 
